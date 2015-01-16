@@ -1,0 +1,213 @@
+Ok now we whould learn how to SST works
+
+fisrt what is the idea?
+what the dependencies are?
+
+fisrt the idea
+
+ok the more complicated part here is the interrupt part 
+it the SST asumes that interrupts are locked when entering a ISR
+wich is not true for ARM-cortexM processors 
+
+function _enble_irq();
+		 _disable_irq();
+
+just add the pends_sv intruction and configure the pend_sv interrupt as
+a lowest interrupt  
+
+can we disable interrupts when in interrupt mode? who know but we can just cal a SVC interrupt cofgiured for max priority and we are done
+
+ok we now understand the interrup operation but now we have a new problem, how do we use the SST 
+
+the CMSIS 
+we init the SO
+we add threads to the kernel
+we start the kernel 
+we can stop treads 
+we can remove threads form kernel
+we cand create mutex elements 
+we can send mesages
+
+so lets see what we can do on the SST
+
+In SST we have events,mutex
+
+EVENTS (signal posting)
+represente as
+struct
+{
+	int_8 SSTSignal sig		//the event type that ocurred
+	int_8 SSTParam par //some info realated to the event
+}
+
+The priorities start at 1 to 8 (i supose this use priority as a treadID so two tasks cannot run with the same prioriry anyways this is event driven so this should be a problem) the 0 is used for the iddle tread
+and cannot be explicitly used 
+
+#WE HAVE 8 TASKS MAX
+
+ok now we could take values like 
+
+
+SST_post(uint8_t prio, SSTSignal sig, SSTParam par)
+so this way of signal posting is pretty straigh 
+
+creanting taks
+
+the SSTTask type goes
+typedef void (*SSTTask)(SSTEvent e); 
+
+so any  function definition should go in the form 
+void myTaskName(SSTEvent eventVarName){
+	//do stuff here but do not loop indefinitely
+}
+
+now you need to assign a priority/taskID to the task so select one
+you may want to use a DEFINE for that
+
+#define myTask_ID  2
+
+now you have to allocate a queue for the events to e stored 
+bore being dispatched so create an array of type SSTEvent
+
+SSTEvent myTask_EvntQueue[lengthOfQueue];
+
+you may want to use a define to store the length og the queue too
+
+#define myTask_EVQL  5
+
+ok now we have to create a task by calling the fuction SST_task
+
+void SST_task(SSTTask task, 
+	uint8_t prio, 
+	SSTEvent *queue, 
+	uint8_t qlen,
+	SSTSignal sig, 
+	SSTParam par)
+
+this function will initialize the TCB and inmeatly send a event with parameters SSTEvent{sig,par}
+
+so its recommened to define a event such that when recived will configure the stuff nedded to run the task
+
+#define SST_SIGNAL_TASKINIT	0
+
+so our call to SST_task may look like this:
+
+void SST_task(myTaskName,myTask_ID, &myTask_EventQueue, myTask_EVQL, INIT_SIG, INIT_PAR);
+
+a cool way to implement this could be
+
+
+
+
+/*file: sst_stdsignal.h*/
+/***********************/
+#ifndef _SST_STDSIGNAL_H_
+#define _SST_STDSIGNAL_H_
+/*required includes*/
+#define SST_SIGNAL_TASKINIT	0
+//add more predefined events here
+#endif
+/***********************/
+
+
+/*file: myTask1.h */
+/******************/
+#ifndef _MYTASK1_H_
+#define _MYTASK1_H_
+/*required includes*/
+#include sst.h
+#include sst_stdsignal.h
+/*exported macros*/
+#define myTask1_ID  1
+#define myTask1_EVQL  4
+/*exported variables*/
+extern SSTEvent myTask1_EQ[myTask1_EVQL];
+/*exported functions*/
+void myTask1(SSTEvent event);
+#endif
+/******************/
+
+/*file: myTask1.c */
+/******************/
+#include <myTask1.h>
+
+SSTEvent myTask_EQ[myTask1_EVQL];
+
+
+void myTask1(SSTEvent event){
+	if(event.sig==SST_SIGNAL_TASKINIT){
+			//do stuff that this task may need prior normal execution
+	}
+	else ... //other event decoding 
+}
+/******************/
+
+the SST core files define the following  callbacks that shall be implemente by the user
+
+voidSST_init(void); //code that that has run before any Os related operation 
+
+void SST_start(void);//code that has to run before OS starts to run Task in normal operation but before the tasks have been added ant inited I.E. starting some system timer 
+void SST_onIdle(void);//Lowest level task that will run when no other Task is in ready mode
+void SST_exit(void);// code to be executed before system exit
+					//this code may call the stantard library function
+					//exit();
+					//this function must not return under any 
+					//circumnstace 
+
+now an example of how the implemetation of this functions may look like
+
+/*file:SST_user.c*/
+
+void SST_init(void) {
+	//before doing any OS realted stuff
+	//you may need to cofigure you system
+	//that kind of general configuration 
+	//goes here
+	//I.E.  processor clock setup  
+}
+/*..........................................................................*/
+void SST_start(void) {
+	//enable some sepecific interrupts
+	//start some periperial ,timers ..
+	//your tasks are about to start
+	//do they need somthing 
+	//that haven't been done before?
+}
+/*..........................................................................*/
+void SST_onIdle(void) {	
+	//spare time
+	//do anithing you want 
+	//but do not loop 
+	//you may want to post some events anyway
+	//no time critical operations
+}
+/*..........................................................................*/
+void SST_exit(void) {
+	//shutdown some stuff
+ 	exit(0);
+}
+
+
+now at our main application we have to follow this stepps to 
+	1) Call the SST_init(); 
+	2) Add tasks using SST_Task();
+	3) Call SST_run();
+
+main.c
+
+#include "sst.h"
+#include "myTask1.h"
+
+int main(){
+		
+		//if need do stuff before calling any OS related fucntions
+
+		SST_init(); 
+		SST_task(myTask1,myTask1_ID, &myTask1_EQ, myTask1_EVQL, SST_SIGNAL_TASKINIT, 0);
+		//add more tasks if nedded
+		SST_run();
+		return 0;
+}
+
+
+
