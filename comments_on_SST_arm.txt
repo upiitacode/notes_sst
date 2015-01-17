@@ -210,4 +210,111 @@ int main(){
 }
 
 
+The interrupt task 
+
+SST is designed to be preemptive, and its realization is done 
+though Interrupt Service Routines (ISR) they shall be implemented
+int he following way
+
+suponse we have interrupt function that is executed every time 
+the pins on the general poupouse input output port A recives a rising/falling edge
+
+
+
+void GPIOA_ISR(void){
+	
+}
+
+
+the elemetes related with event signaling area
+
+event queue
+event type
+signal 
+par
+
+to send a event just call the fucntion SST_post
+
+uint8_t SST_post(uint8_t prio, SSTSignal sig, SSTParam par)
+
+"prio" is the priority/taskID of the the task we want to send a the event
+
+"SSTSginal" is the event type we want to send to the task, it's important that both sender and  receiver aggree on what the event
+means so a #define with the form taskName_EVENT_eventtype the task
+header file may be a good aproach
+
+In Example:
+
+	#define TASK1_EVENT_DATA_RECEIVED 	5
+    #define TASK1_EVENT_DATA_LOST 		6
+    #define TASK1_EVENT_TRANSMISSION_LOST 	7
+
+
+"par" is the a value realted to the event that is being posted
+in the case of the  TASK1_EVENT_DATA_RECEIVED par migth be the number
+of bytes that have been received or the received byte itself, its 
+meaning is left to user particular implementation
+
+the return value once the STT_post has been executed it will
+retur a  1 in post succes and a 0  in post fail
+
+just remeber that both SSTSignal and SSTParam  types where defined
+as uint_8t so assign values that can fit there
+
+A particular call maigh look like  
+
+if(SST_post(TASK1_ID, TASK1_EVENT_DATA_RECEIVED,'\n')==0){
+	//Do something here due to event post fail	
+}
+
+the  recieving task may be called SST_post fucntion depending on
+its priority  and receives the values packed in the SSTEvent structure 
+
+typedef struct SSTEventTag SSTEvent;
+struct SSTEventTag {
+    SSTSignal sig;
+    SSTParam  par;
+};
+
+so a acces to its value may look like
+
+TASK1(SSTEvent event){
+	if(event.sig==TASK1_EVENT_DATA_RECEIVED){
+		putc(event.par);
+	}else{
+		//Do something else ...
+	}
+}
+
+most of the syncrounous preemption is done by a task posting 
+events to another task of higher value 
+
+the interrupts shall have the following structure
+
+
+
+void UART_IRQ(void){
+	int_8t saveTaskID;
+	SST_ISR_ENTRY()
+	SST_ISR_EXIT()
+}
+
+
+
+
+
+
+
+
+
+
+event type structure looks like this
+
+struct
+{
+	 SSTSignal sig		//the event type that ocurred
+	 SSTParam par //some info realated to the event
+}
+
+
 
